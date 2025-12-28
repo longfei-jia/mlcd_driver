@@ -63,6 +63,8 @@ void Error_Handler(void);
 #define CS_GPIO_Port GPIOA
 #define DISP_Pin GPIO_PIN_6
 #define DISP_GPIO_Port GPIOA
+#define KEY_Pin GPIO_PIN_8
+#define KEY_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
 

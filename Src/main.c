@@ -21,12 +21,13 @@
 #include "spi.h"
 #include "tim.h"
 #include "gpio.h"
-#include "mlcd.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdlib.h> // for rand, srand
+#include <stdio.h>
 #include "animation.h"
+#include "encoder.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,12 +93,17 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_TIM5_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   MLCD_Init();
-  // Animation_Init(); // 2D 碰撞动画
-  // Animation3D_Cube_Init(); // 3D 正方体
-  // Animation3D_Pyramid_Init(); // 3D 四面体
-  Animation3D_Sphere_Init(); // 3D 线框球体
+  Encoder_Init();
+  
+  // 演示变量
+  int32_t counter = 0;
+  char buf[32];
+  const char* key_msg = "None";
+  uint32_t key_msg_tick = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -107,11 +113,63 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // Animation_Run();
-    // Animation3D_Cube_Run();
-     Animation3D_Pyramid_Run();
-    //Animation3D_Sphere_Run();
+    // 1. 扫描输入
+    Encoder_Scan();
+    
+    // 2. 获取数据
+    int32_t diff = Encoder_GetDiff();
+    counter += diff;
+    
+    KeyEvent_t evt = Key_GetEvent();
+    if (evt != KEY_EVENT_NONE) {
+        key_msg_tick = HAL_GetTick();
+        switch(evt) {
+            case KEY_EVENT_CLICK:        key_msg = "Click"; break;
+            case KEY_EVENT_DOUBLE_CLICK: key_msg = "Double"; break;
+            case KEY_EVENT_LONG_PRESS:   key_msg = "LongPress"; break;
+            default: break;
+        }
+    }
+    
+    // 3. 3秒后清除按键消息
+    if (HAL_GetTick() - key_msg_tick > 3000) {
+        key_msg = "None";
+    }
 
+    // 4. 显示绘制
+    MLCD_ClearBuffer();
+    
+    MLCD_DrawString(10, 10, "--- Encoder Test ---", MLCD_COLOR_BLACK);
+    
+    // 显示计数值
+    sprintf(buf, "Value: %ld", counter);
+    MLCD_DrawString(10, 35, buf, MLCD_COLOR_BLACK);
+    
+    // 显示方向
+    if (diff > 0) {
+        MLCD_DrawString(10, 55, "Dir: CW  >>>", MLCD_COLOR_BLACK);
+    } else if (diff < 0) {
+        MLCD_DrawString(10, 55, "Dir: CCW <<<", MLCD_COLOR_BLACK);
+    } else {
+        MLCD_DrawString(10, 55, "Dir: Stop", MLCD_COLOR_BLACK);
+    }
+    
+    // 显示按键状态
+    sprintf(buf, "Key: %s", key_msg);
+    MLCD_DrawString(10, 75, buf, MLCD_COLOR_BLACK);
+    
+    // 绘制一个随编码器旋转的小方块
+    int box_x = (counter * 2) % (MLCD_WIDTH - 10);
+    if (box_x < 0) box_x += (MLCD_WIDTH - 10);
+    MLCD_DrawLine(box_x, 95, box_x + 10, 95, MLCD_COLOR_BLACK);
+    MLCD_DrawLine(box_x + 10, 95, box_x + 10, 105, MLCD_COLOR_BLACK);
+    MLCD_DrawLine(box_x + 10, 105, box_x, 105, MLCD_COLOR_BLACK);
+    MLCD_DrawLine(box_x, 105, box_x, 95, MLCD_COLOR_BLACK);
+
+    MLCD_Refresh();
+    
+    // 简单的帧率控制
+    HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
