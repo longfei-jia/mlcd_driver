@@ -6,6 +6,7 @@
 #include "spi.h"
 #include "tim.h"
 #include <stdlib.h> // for abs()
+#include <string.h> // for memcpy
 
 // 显存缓冲区 (1 bit per pixel)
 // 128 * 128 / 8 = 2048 bytes
@@ -98,6 +99,35 @@ void MLCD_Fill(uint8_t color)
 }
 
 // 简单的 5x7 ASCII 字体数据 (空格到 ~)
+
+/**
+ * @brief 获取显存缓冲区副本
+ * @param dest 目标缓冲区 (大小必须为 MLCD_HEIGHT * MLCD_WIDTH / 8)
+ */
+void MLCD_CopyBuffer(uint8_t *dest)
+{
+    if (!dest) return;
+    memcpy(dest, mlcd_buffer, sizeof(mlcd_buffer));
+}
+
+/**
+ * @brief 设置显存缓冲区内容
+ * @param src 源缓冲区
+ */
+void MLCD_SetBuffer(const uint8_t *src)
+{
+    if (!src) return;
+    memcpy(mlcd_buffer, src, sizeof(mlcd_buffer));
+}
+
+/**
+ * @brief 获取显存缓冲区指针 (用于高级操作)
+ */
+uint8_t* MLCD_GetBufferPtr(void)
+{
+    return (uint8_t*)mlcd_buffer;
+}
+
 // 每个字符 5 字节，每字节代表一列 (垂直方向低位在上)
 static const uint8_t font5x7[][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00}, // Space
@@ -226,6 +256,29 @@ void MLCD_DrawString(uint8_t x, uint8_t y, const char *str, uint8_t color)
         MLCD_DrawChar(x, y, *str, color);
         x += 6; // 5 + 1 spacing
         str++;
+    }
+}
+
+/**
+ * @brief 绘制位图
+ * @param bitmap 取模方式：逐行式，高位在前 (MSB First) 或 低位在前？
+ * 这里假设：横向取模，字节内高位在前 (MSB First -> pixel 0 is bit 7)
+ */
+void MLCD_DrawBitmap(int x, int y, int w, int h, const uint8_t *bitmap, uint8_t color) {
+    if (!bitmap) return;
+    
+    int byte_width = (w + 7) / 8;
+    
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+            // 计算当前像素在 bitmap 中的位置
+            int byte_idx = row * byte_width + (col / 8);
+            int bit_idx = 7 - (col % 8); // MSB First
+            
+            if (bitmap[byte_idx] & (1 << bit_idx)) {
+                MLCD_SetPixel(x + col, y + row, color);
+            }
+        }
     }
 }
 
@@ -571,10 +624,10 @@ void MLCD_InvertRoundRect(int x, int y, int w, int h, int r) {
         // Loop 1: y_offset = cx
         // Line at y + r - 1 - cx (Top) AND y + h - r + cx (Bottom)
         // Width spans from (x + r - 1 - cy) to (x + w - r + cy)
-        int y_top1 = y + r - 1 - cx;
-        int y_bot1 = y + h - r + cx;
-        int x_start1 = x + r - 1 - cy;
-        int width1 = (w - 2 * r) + 2 * cy + 2; // (x+w-r+cy) - (x+r-1-cy) + 1 = w - 2r + 2cy + 2
+        // int y_top1 = y + r - 1 - cx;
+        // int y_bot1 = y + h - r + cx;
+        // int x_start1 = x + r - 1 - cy;
+        // int width1 = (w - 2 * r) + 2 * cy + 2; // (x+w-r+cy) - (x+r-1-cy) + 1 = w - 2r + 2cy + 2
 
         // 避免重复绘制 (当 cy == cx 时，y_top1/2 和 y_bot1/2 是一样的)
         // 但这里是逐行扫描，cx 和 cy 是变化的 Y 轴偏移量？

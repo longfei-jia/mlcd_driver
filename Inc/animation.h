@@ -5,6 +5,7 @@
 #ifndef MLCD_DRIVER_ANIMATION_H
 #define MLCD_DRIVER_ANIMATION_H
 
+#include <stdbool.h>
 #include "mlcd.h"
 
 // 初始化动画模块 (创建方块、设置初始状态)
@@ -66,5 +67,23 @@ void Animation_Spring_SetTarget(SpringAnim_t *anim, float target);
  * @return 当前计算出的位置
  */
 float Animation_Spring_Update(SpringAnim_t *anim, float dt);
+
+// ----------------------------------------------------------------------------
+// Page Transition System (页面切换过渡)
+// ----------------------------------------------------------------------------
+
+// 开始页面切换过渡 (捕获当前屏幕)
+void Animation_Transition_Start(void);
+
+// 更新过渡动画状态
+// @param dt 时间步长
+// @return true if transitioning, false if done
+bool Animation_Transition_Update(float dt);
+
+// 应用过渡效果到显存 (在每一帧绘制完成后调用)
+void Animation_Transition_Apply(void);
+
+// 检查是否正在进行过渡
+bool Animation_IsTransitioning(void);
 
 #endif //MLCD_DRIVER_ANIMATION_H

@@ -45,11 +45,21 @@ typedef struct MenuItem {
     // 链表指针
     struct MenuItem *next;
     
+    // 图标数据 (32x32 bitmap, optional)
+    const uint8_t *icon;
+    
 } MenuItem_t;
+
+// 菜单布局类型
+typedef enum {
+    MENU_LAYOUT_LIST,       // 垂直列表 (默认)
+    MENU_LAYOUT_CAROUSEL    // 横向图标滚动
+} MenuLayout_t;
 
 // 菜单页面结构体
 typedef struct MenuPage {
     const char *title;          // 页面标题
+    MenuLayout_t layout;        // 布局模式
     
     MenuItem_t *head;           // 链表头
     MenuItem_t *tail;           // 链表尾 (方便追加)
@@ -75,6 +85,9 @@ extern bool setting_dark_mode;
 // 初始化菜单系统
 void Menu_Init(MenuPage_t *root_page);
 
+// 配置菜单内容 (需要在 Menu_Init 之前调用)
+void Setup_Menus(void);
+
 // 菜单主循环 (需要在主循环中周期性调用)
 void Menu_Loop(void);
 
@@ -89,8 +102,14 @@ void Menu_Back(void);
 // 创建新页面
 MenuPage_t* Menu_CreatePage(const char *title);
 
+// 设置页面布局
+void Menu_SetLayout(MenuPage_t *page, MenuLayout_t layout);
+
 // 添加普通动作项
 MenuItem_t* Menu_AddAction(MenuPage_t *page, const char *label, MenuCallback_t callback, void *data);
+
+// 设置菜单项图标
+void Menu_SetItemIcon(MenuItem_t *item, const uint8_t *icon);
 
 // 添加开关项
 MenuItem_t* Menu_AddToggle(MenuPage_t *page, const char *label, bool *val_ptr, MenuCallback_t callback);

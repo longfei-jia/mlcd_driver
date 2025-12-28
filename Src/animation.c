@@ -59,7 +59,89 @@ void Animation_Init(void) {
     }
 }
 
-#include <math.h>
+#include <stdbool.h>
+
+// ... (existing code)
+
+// ----------------------------------------------------------------------------
+// Page Transition Implementation
+// ----------------------------------------------------------------------------
+
+static uint8_t old_page_buffer[MLCD_HEIGHT][MLCD_WIDTH / 8];
+static uint8_t new_page_buffer[MLCD_HEIGHT][MLCD_WIDTH / 8];
+static float transition_progress = 0.0f;
+static bool is_transitioning = false;
+
+// Bayer Matrix 4x4 (0-15)
+static const uint8_t bayer_matrix[4][4] = {
+    { 0,  8,  2, 10},
+    {12,  4, 14,  6},
+    { 3, 11,  1,  9},
+    {15,  7, 13,  5}
+};
+
+void Animation_Transition_Start(void) {
+    MLCD_CopyBuffer((uint8_t*)old_page_buffer);
+    transition_progress = 0.0f;
+    is_transitioning = true;
+}
+
+bool Animation_Transition_Update(float dt) {
+    if (!is_transitioning) return false;
+    
+    // 过渡速度 (1.0 / Duration)
+    // 假设 0.5秒 完成
+    transition_progress += dt * 2.0f;
+    
+    if (transition_progress >= 1.0f) {
+        transition_progress = 1.0f;
+        is_transitioning = false;
+        return false;
+    }
+    return true;
+}
+
+bool Animation_IsTransitioning(void) {
+    return is_transitioning;
+}
+
+void Animation_Transition_Apply(void) {
+    if (!is_transitioning) return;
+    
+    // 1. 捕获当前应用绘制的新页面
+    MLCD_CopyBuffer((uint8_t*)new_page_buffer);
+    
+    uint8_t *dest = MLCD_GetBufferPtr();
+    int threshold = (int)(transition_progress * 17); // 0-16 (覆盖 0-15)
+    
+    // 2. 混合 (Dither Dissolve)
+    for (int y = 0; y < MLCD_HEIGHT; y++) {
+        for (int col = 0; col < MLCD_WIDTH / 8; col++) {
+            uint8_t old_byte = old_page_buffer[y][col];
+            uint8_t new_byte = new_page_buffer[y][col];
+            uint8_t res_byte = 0;
+            
+            for (int bit = 0; bit < 8; bit++) {
+                int x = col * 8 + bit;
+                uint8_t bayer_val = bayer_matrix[y % 4][x % 4];
+                
+                // 如果阈值大于 Bayer 值，显示新像素
+                if (threshold > bayer_val) {
+                    if (new_byte & (1 << bit)) {
+                        res_byte |= (1 << bit);
+                    }
+                } else {
+                    // 否则显示旧像素
+                    if (old_byte & (1 << bit)) {
+                        res_byte |= (1 << bit);
+                    }
+                }
+            }
+            dest[y * (MLCD_WIDTH / 8) + col] = res_byte;
+        }
+    }
+}
+
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -389,6 +471,7 @@ float Animation_Spring_Update(SpringAnim_t *anim, float dt) {
     
     return anim->position;
 }
+
 
 /**
  * @brief 运行一帧动画

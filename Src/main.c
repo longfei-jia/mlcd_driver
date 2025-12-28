@@ -30,73 +30,6 @@
 #include "encoder.h"
 #include "menu.h"
 
-// --- 菜单数据定义 ---
-static bool setting_sound = true;
-static bool setting_vibration = false;
-bool setting_dark_mode = false; // 深色模式 (反色显示，全局可见)
-static int32_t setting_brightness = 50;
-static int32_t setting_contrast = 80;
-
-// 主题切换回调
-void Action_ToggleTheme(MenuItem_t *item) {
-    // 这里仅切换变量，具体的全屏反色逻辑需要在 Menu_Render 中实现
-}
-
-// 阻尼设置变量
-static int32_t setting_stiffness = 100; // 刚度 (50-200)
-static int32_t setting_damping = 12;    // 阻尼 (1-30)
-
-// 阻尼设置回调 (每次调节数值后重新应用参数)
-void Action_ApplyCustomDamping(MenuItem_t *item) {
-    // 仅更新参数，不重置位置
-    cursor_anim.stiffness = (float)setting_stiffness;
-    cursor_anim.damping = (float)setting_damping;
-}
-
-void Action_Save(MenuItem_t *item) {
-    // 模拟保存动作
-}
-
-// 全局菜单指针
-MenuPage_t *page_main;
-MenuPage_t *page_display;
-MenuPage_t *page_damping;
-MenuPage_t *page_info;
-
-// 初始化菜单结构
-void Setup_Menus(void) {
-    // 创建页面
-    page_main = Menu_CreatePage("Main Menu");
-    page_display = Menu_CreatePage("Display");
-    page_damping = Menu_CreatePage("Anim Damping");
-    page_info = Menu_CreatePage("System Info");
-
-    // 构建 Main Menu
-    Menu_AddSubMenu(page_main, "Display", page_display);
-    Menu_AddSubMenu(page_main, "Damping", page_damping);
-    Menu_AddToggle(page_main, "Theme", &setting_dark_mode, Action_ToggleTheme);
-    Menu_AddToggle(page_main, "Sound", &setting_sound, NULL);
-    Menu_AddToggle(page_main, "Vibrate", &setting_vibration, NULL);
-    Menu_AddSubMenu(page_main, "Info", page_info);
-    Menu_AddAction(page_main, "Save Cfg", Action_Save, NULL);
-    Menu_AddAction(page_main, "Reboot", NULL, NULL);
-
-    // 构建 Display Menu
-    Menu_AddValue(page_display, "Brightness", &setting_brightness, 0, 100, 5, NULL);
-    Menu_AddValue(page_display, "Contrast", &setting_contrast, 0, 100, 1, NULL);
-    Menu_AddAction(page_display, "Back", (MenuCallback_t)Menu_Back, NULL); // 使用 Menu_Back 作为回调
-
-    // 构建 Damping Menu
-    Menu_AddValue(page_damping, "Stiffness", &setting_stiffness, 50, 200, 10, Action_ApplyCustomDamping);
-    Menu_AddValue(page_damping, "Damping", &setting_damping, 1, 30, 1, Action_ApplyCustomDamping);
-    Menu_AddAction(page_damping, "Back", (MenuCallback_t)Menu_Back, NULL);
-
-    // 构建 Info Menu
-    Menu_AddAction(page_info, "Ver: 1.0.0", NULL, NULL);
-    Menu_AddAction(page_info, "Build: Dec28", NULL, NULL);
-    Menu_AddAction(page_info, "Back", (MenuCallback_t)Menu_Back, NULL);
-}
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -170,9 +103,10 @@ int main(void)
   // 动态构建菜单
   Setup_Menus();
   
-  // 初始化菜单系统
-  Menu_Init(page_main);
-
+  // Menu_Init 已经在 Setup_Menus 内部调用了 (或者我们应该保持分离)
+  // 在 menu.c 的 Setup_Menus 实现中，最后调用了 Menu_Init(page_main)。
+  // 所以这里 main.c 只需要调用 Setup_Menus 即可。
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
