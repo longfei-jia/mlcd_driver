@@ -25,7 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdlib.h> // for rand, srand
+#include "animation.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,6 +94,10 @@ int main(void)
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   MLCD_Init();
+  // Animation_Init(); // 2D 碰撞动画
+  // Animation3D_Cube_Init(); // 3D 正方体
+  // Animation3D_Pyramid_Init(); // 3D 四面体
+  Animation3D_Sphere_Init(); // 3D 线框球体
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -102,50 +107,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    
-    // ------------------------------------------------
-    // 模式 1: 全屏黑色
-    // ------------------------------------------------
-    for (int y = 0; y < 128; y++) {
-        for (int x = 0; x < 128; x++) {
-             MLCD_SetPixel(x, y, MLCD_COLOR_BLACK);
-        }
-    }
-    MLCD_Refresh();
-    HAL_Delay(2000);
+    // Animation_Run();
+    // Animation3D_Cube_Run();
+     Animation3D_Pyramid_Run();
+    //Animation3D_Sphere_Run();
 
-    // ------------------------------------------------
-    // 模式 2: 全屏白色
-    // ------------------------------------------------
-    MLCD_Clear(); // Clear 默认为白色
-    MLCD_Refresh();
-    HAL_Delay(2000);
-
-    // ------------------------------------------------
-    // 模式 3: 上半屏黑，下半屏白
-    // ------------------------------------------------
-    MLCD_Clear();
-    for (int y = 0; y < 64; y++) { // 0-63行 (上半部分)
-        for (int x = 0; x < 128; x++) {
-             MLCD_SetPixel(x, y, MLCD_COLOR_BLACK);
-        }
-    }
-    // 64-127行 保持白色 (Clear已清除)
-    MLCD_Refresh();
-    HAL_Delay(2000);
-
-    // ------------------------------------------------
-    // 模式 4: 上半屏白，下半屏黑
-    // ------------------------------------------------
-    MLCD_Clear();
-    // 0-63行 保持白色
-    for (int y = 64; y < 128; y++) { // 64-127行 (下半部分)
-        for (int x = 0; x < 128; x++) {
-             MLCD_SetPixel(x, y, MLCD_COLOR_BLACK);
-        }
-    }
-    MLCD_Refresh();
-    HAL_Delay(2000);
   }
   /* USER CODE END 3 */
 }

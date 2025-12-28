@@ -17,9 +17,12 @@
 
 // 函数声明
 void MLCD_Init(void);
-void MLCD_Clear(void);
-void MLCD_SetPixel(uint8_t x, uint8_t y, uint8_t color);
-void MLCD_DrawLine(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color);
+void MLCD_Clear(void);        // 清除屏幕和显存 (硬件清屏)
+void MLCD_ClearBuffer(void);  // 仅清除显存 (不发送硬件命令)
+void MLCD_SetPixel(int x, int y, uint8_t color);
+void MLCD_DrawLine(int x0, int y0, int x1, int y1, uint8_t color);
+void MLCD_DrawChar(uint8_t x, uint8_t y, char c, uint8_t color);
+void MLCD_DrawString(uint8_t x, uint8_t y, const char *str, uint8_t color);
 void MLCD_Refresh(void);     // 刷新显存到屏幕
 
 
