@@ -40,10 +40,7 @@ static int32_t setting_contrast = 80;
 // 主题切换回调
 void Action_ToggleTheme(MenuItem_t *item) {
     // 这里仅切换变量，具体的全屏反色逻辑需要在 Menu_Render 中实现
-    // 或者通过 MLCD 驱动层的全局反色标志来实现
 }
-
-// 阻尼设置变量static int32_t setting_contrast = 80;
 
 // 阻尼设置变量
 static int32_t setting_stiffness = 100; // 刚度 (50-200)
@@ -56,46 +53,49 @@ void Action_ApplyCustomDamping(MenuItem_t *item) {
     cursor_anim.damping = (float)setting_damping;
 }
 
-// 子菜单: 阻尼设置 (数值调节)
-static MenuItem_t damping_items[] = {
-    {"Stiffness", MENU_ITEM_VALUE, NULL, Action_ApplyCustomDamping, &setting_stiffness, 50, 200, 10},
-    {"Damping",   MENU_ITEM_VALUE, NULL, Action_ApplyCustomDamping, &setting_damping, 1, 30, 1},
-    {"Back",      MENU_ITEM_BACK,  NULL, NULL, NULL}
-};
-static MENU_PAGE(page_damping, "Anim Damping");
-
 void Action_Save(MenuItem_t *item) {
     // 模拟保存动作
 }
 
-// 子菜单: 显示设置
-static MenuItem_t display_items[] = {
-    {"Brightness", MENU_ITEM_VALUE, NULL, NULL, &setting_brightness, 0, 100, 5},
-    {"Contrast",   MENU_ITEM_VALUE, NULL, NULL, &setting_contrast, 0, 100, 1},
-    {"Back",       MENU_ITEM_BACK,  NULL, NULL, NULL}
-};
-static MENU_PAGE(page_display, "Display");
+// 全局菜单指针
+MenuPage_t *page_main;
+MenuPage_t *page_display;
+MenuPage_t *page_damping;
+MenuPage_t *page_info;
 
-// 子菜单: 系统信息
-static MenuItem_t info_items[] = {
-    {"Ver: 1.0.0", MENU_ITEM_ACTION, NULL, NULL, NULL},
-    {"Build: Dec28",MENU_ITEM_ACTION, NULL, NULL, NULL},
-    {"Back",       MENU_ITEM_BACK,   NULL, NULL, NULL}
-};
-static MENU_PAGE(page_info, "System Info");
+// 初始化菜单结构
+void Setup_Menus(void) {
+    // 创建页面
+    page_main = Menu_CreatePage("Main Menu");
+    page_display = Menu_CreatePage("Display");
+    page_damping = Menu_CreatePage("Anim Damping");
+    page_info = Menu_CreatePage("System Info");
 
-// 主菜单
-static MenuItem_t main_items[] = {
-    {"Display",    MENU_ITEM_SUBMENU, &page_display, NULL, NULL},
-    {"Damping",    MENU_ITEM_SUBMENU, &page_damping, NULL, NULL},
-    {"Theme",      MENU_ITEM_TOGGLE,  NULL, Action_ToggleTheme, &setting_dark_mode},
-    {"Sound",      MENU_ITEM_TOGGLE,  NULL, NULL, &setting_sound},
-    {"Vibrate",    MENU_ITEM_TOGGLE,  NULL, NULL, &setting_vibration},
-    {"Info",       MENU_ITEM_SUBMENU, &page_info, NULL, NULL},
-    {"Save Cfg",   MENU_ITEM_ACTION,  NULL, Action_Save, NULL},
-    {"Reboot",     MENU_ITEM_ACTION,  NULL, NULL, NULL}
-};
-static MENU_PAGE(page_main, "Main Menu");
+    // 构建 Main Menu
+    Menu_AddSubMenu(page_main, "Display", page_display);
+    Menu_AddSubMenu(page_main, "Damping", page_damping);
+    Menu_AddToggle(page_main, "Theme", &setting_dark_mode, Action_ToggleTheme);
+    Menu_AddToggle(page_main, "Sound", &setting_sound, NULL);
+    Menu_AddToggle(page_main, "Vibrate", &setting_vibration, NULL);
+    Menu_AddSubMenu(page_main, "Info", page_info);
+    Menu_AddAction(page_main, "Save Cfg", Action_Save, NULL);
+    Menu_AddAction(page_main, "Reboot", NULL, NULL);
+
+    // 构建 Display Menu
+    Menu_AddValue(page_display, "Brightness", &setting_brightness, 0, 100, 5, NULL);
+    Menu_AddValue(page_display, "Contrast", &setting_contrast, 0, 100, 1, NULL);
+    Menu_AddAction(page_display, "Back", (MenuCallback_t)Menu_Back, NULL); // 使用 Menu_Back 作为回调
+
+    // 构建 Damping Menu
+    Menu_AddValue(page_damping, "Stiffness", &setting_stiffness, 50, 200, 10, Action_ApplyCustomDamping);
+    Menu_AddValue(page_damping, "Damping", &setting_damping, 1, 30, 1, Action_ApplyCustomDamping);
+    Menu_AddAction(page_damping, "Back", (MenuCallback_t)Menu_Back, NULL);
+
+    // 构建 Info Menu
+    Menu_AddAction(page_info, "Ver: 1.0.0", NULL, NULL);
+    Menu_AddAction(page_info, "Build: Dec28", NULL, NULL);
+    Menu_AddAction(page_info, "Back", (MenuCallback_t)Menu_Back, NULL);
+}
 
 /* USER CODE END Includes */
 
@@ -167,21 +167,11 @@ int main(void)
   MLCD_Init();
   Encoder_Init();
   
-  // 链接菜单数据
-  page_main.items = main_items;
-  page_main.item_count = sizeof(main_items) / sizeof(main_items[0]);
-  
-  page_display.items = display_items;
-  page_display.item_count = sizeof(display_items) / sizeof(display_items[0]);
-  
-  page_damping.items = damping_items;
-  page_damping.item_count = sizeof(damping_items) / sizeof(damping_items[0]);
-  
-  page_info.items = info_items;
-  page_info.item_count = sizeof(info_items) / sizeof(info_items[0]);
+  // 动态构建菜单
+  Setup_Menus();
   
   // 初始化菜单系统
-  Menu_Init(&page_main);
+  Menu_Init(page_main);
 
   /* USER CODE END 2 */
 

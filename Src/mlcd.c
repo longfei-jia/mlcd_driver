@@ -400,3 +400,222 @@ void MLCD_DrawRect(int x, int y, int w, int h, uint8_t color) {
     MLCD_DrawLine(x + w - 1, y + h - 1, x, y + h - 1, color);
     MLCD_DrawLine(x, y + h - 1, x, y, color);
 }
+
+/**
+ * @brief 填充矩形
+ */
+void MLCD_FillRect(int x, int y, int w, int h, uint8_t color) {
+    if (w <= 0 || h <= 0) return;
+    for (int i = 0; i < h; i++) {
+        MLCD_DrawLine(x, y + i, x + w - 1, y + i, color);
+    }
+}
+
+/**
+ * @brief 画圆 (Bresenham)
+ */
+void MLCD_DrawCircle(int x0, int y0, int r, uint8_t color) {
+    int x = 0, y = r;
+    int d = 3 - 2 * r;
+    
+    while (y >= x) {
+        MLCD_SetPixel(x0 + x, y0 + y, color);
+        MLCD_SetPixel(x0 - x, y0 + y, color);
+        MLCD_SetPixel(x0 + x, y0 - y, color);
+        MLCD_SetPixel(x0 - x, y0 - y, color);
+        MLCD_SetPixel(x0 + y, y0 + x, color);
+        MLCD_SetPixel(x0 - y, y0 + x, color);
+        MLCD_SetPixel(x0 + y, y0 - x, color);
+        MLCD_SetPixel(x0 - y, y0 - x, color);
+        
+        x++;
+        if (d > 0) {
+            y--;
+            d = d + 4 * (x - y) + 10;
+        } else {
+            d = d + 4 * x + 6;
+        }
+    }
+}
+
+/**
+ * @brief 填充圆
+ */
+void MLCD_FillCircle(int x0, int y0, int r, uint8_t color) {
+    int x = 0, y = r;
+    int d = 3 - 2 * r;
+    
+    while (y >= x) {
+        // Draw horizontal lines
+        MLCD_DrawLine(x0 - x, y0 + y, x0 + x, y0 + y, color);
+        MLCD_DrawLine(x0 - x, y0 - y, x0 + x, y0 - y, color);
+        MLCD_DrawLine(x0 - y, y0 + x, x0 + y, y0 + x, color);
+        MLCD_DrawLine(x0 - y, y0 - x, x0 + y, y0 - x, color);
+        
+        x++;
+        if (d > 0) {
+            y--;
+            d = d + 4 * (x - y) + 10;
+        } else {
+            d = d + 4 * x + 6;
+        }
+    }
+}
+
+/**
+ * @brief 画圆角矩形
+ */
+void MLCD_DrawRoundRect(int x, int y, int w, int h, int r, uint8_t color) {
+    // 简单的画线+画弧实现
+    // 实际上可以用 DrawCircle 的一部分逻辑
+    // 这里简化处理：画四条边，角暂时不处理（或者简单画个点）
+    // 为了完整性，我们还是实现一下角的绘制
+    
+    if (r <= 0) {
+        MLCD_DrawRect(x, y, w, h, color);
+        return;
+    }
+    
+    // Top, Bottom
+    MLCD_DrawLine(x + r, y, x + w - r - 1, y, color);
+    MLCD_DrawLine(x + r, y + h - 1, x + w - r - 1, y + h - 1, color);
+    // Left, Right
+    MLCD_DrawLine(x, y + r, x, y + h - r - 1, color);
+    MLCD_DrawLine(x + w - 1, y + r, x + w - 1, y + h - r - 1, color);
+    
+    // Corners
+    int cx = 0, cy = r;
+    int d = 3 - 2 * r;
+    
+    while (cy >= cx) {
+        // Top-Left (x+r, y+r)
+        MLCD_SetPixel(x + r - 1 - cy, y + r - 1 - cx, color); // VIII
+        MLCD_SetPixel(x + r - 1 - cx, y + r - 1 - cy, color); // VII
+        
+        // Top-Right (x+w-r, y+r)
+        MLCD_SetPixel(x + w - r + cx, y + r - 1 - cy, color); // II
+        MLCD_SetPixel(x + w - r + cy, y + r - 1 - cx, color); // I
+        
+        // Bottom-Right (x+w-r, y+h-r)
+        MLCD_SetPixel(x + w - r + cy, y + h - r + cx, color); // IV
+        MLCD_SetPixel(x + w - r + cx, y + h - r + cy, color); // III
+        
+        // Bottom-Left (x+r, y+h-r)
+        MLCD_SetPixel(x + r - 1 - cx, y + h - r + cy, color); // VI
+        MLCD_SetPixel(x + r - 1 - cy, y + h - r + cx, color); // V
+        
+        cx++;
+        if (d > 0) {
+            cy--;
+            d = d + 4 * (cx - cy) + 10;
+        } else {
+            d = d + 4 * cx + 6;
+        }
+    }
+}
+
+/**
+ * @brief 填充圆角矩形
+ */
+void MLCD_FillRoundRect(int x, int y, int w, int h, int r, uint8_t color) {
+    // 分三部分填充：上下圆角部分，中间矩形部分
+    MLCD_FillRect(x, y + r, w, h - 2 * r, color);
+    
+    // 填充四个角 (利用 FillCircle 逻辑)
+    int cx = 0, cy = r;
+    int d = 3 - 2 * r;
+    
+    while (cy >= cx) {
+        // Top Band
+        MLCD_DrawLine(x + r - 1 - cx, y + r - 1 - cy, x + w - r + cx, y + r - 1 - cy, color);
+        MLCD_DrawLine(x + r - 1 - cy, y + r - 1 - cx, x + w - r + cy, y + r - 1 - cx, color);
+        
+        // Bottom Band
+        MLCD_DrawLine(x + r - 1 - cx, y + h - r + cy, x + w - r + cx, y + h - r + cy, color);
+        MLCD_DrawLine(x + r - 1 - cy, y + h - r + cx, x + w - r + cy, y + h - r + cx, color);
+        
+        cx++;
+        if (d > 0) {
+            cy--;
+            d = d + 4 * (cx - cy) + 10;
+        } else {
+            d = d + 4 * cx + 6;
+        }
+    }
+}
+
+/**
+ * @brief 反色圆角矩形 (Improved)
+ */
+void MLCD_InvertRoundRect(int x, int y, int w, int h, int r) {
+    // 限制半径不超过高度/宽度的一半
+    if (r > w/2) r = w/2;
+    if (r > h/2) r = h/2;
+    if (r < 0) r = 0;
+
+    // 1. 反色中间矩形区域 (高度 h - 2*r)
+    if (h > 2 * r) {
+        MLCD_InvertRect(x, y + r, w, h - 2 * r);
+    }
+    
+    // 2. 反色上下圆角部分
+    int cx = 0;
+    int cy = r;
+    int d = 3 - 2 * r;
+    
+    while (cy >= cx) {
+        // 对于每一个 y 偏移 (cy 或 cx)，反色对应的水平线段
+        // 上半圆角 (Center: x+r, y+r)
+        // 下半圆角 (Center: x+w-r, y+h-r) -- 注意这里实际上只需要考虑 Y 轴对称性
+        
+        // Loop 1: y_offset = cx
+        // Line at y + r - 1 - cx (Top) AND y + h - r + cx (Bottom)
+        // Width spans from (x + r - 1 - cy) to (x + w - r + cy)
+        int y_top1 = y + r - 1 - cx;
+        int y_bot1 = y + h - r + cx;
+        int x_start1 = x + r - 1 - cy;
+        int width1 = (w - 2 * r) + 2 * cy + 2; // (x+w-r+cy) - (x+r-1-cy) + 1 = w - 2r + 2cy + 2
+
+        // 避免重复绘制 (当 cy == cx 时，y_top1/2 和 y_bot1/2 是一样的)
+        // 但这里是逐行扫描，cx 和 cy 是变化的 Y 轴偏移量？
+        // Bresenham 算法生成的是 1/8 圆弧的点 (x, y) where x <= y
+        // 我们需要利用对称性填充整行
+        
+        // Row 1 (Using cx as y-offset from center line)
+        // Y = CenterY - cx
+        // X range: CenterX - cy ... CenterX + cy
+        // 这里 CenterX 是指圆心的 X 坐标。
+        // 左圆心: x+r-1 (0-indexed fix?), 右圆心: x+w-r
+        // 左边界: (x+r) - 1 - cy
+        // 右边界: (x+w-r-1) + cy
+        // 长度: (x+w-r-1+cy) - (x+r-1-cy) + 1 = w - 2r + 2cy
+        
+        // 修正坐标系：
+        // 圆心应在 x+r, y+r (对于左上角)。像素坐标从 x 到 x+2r 覆盖圆。
+        // 实际上 Bresenham 假设圆心 (0,0)。
+        // 左侧圆弧：x_left = (x + r) - 1 - cy
+        // 右侧圆弧：x_right = (x + w - r) + cy - 1
+        // 注意：我们希望圆角矩形填满整个宽度 w。
+        // 最宽处 (cx=0, cy=r) -> x_left = x, x_right = x+w-1. Correct.
+        
+        // Row A: y_offset = cx
+        // Top Row: y + r - 1 - cx
+        MLCD_InvertRect(x + r - 1 - cy, y + r - 1 - cx, w - 2 * r + 2 * cy + 2, 1);
+        // Bottom Row: y + h - r + cx
+        MLCD_InvertRect(x + r - 1 - cy, y + h - r + cx, w - 2 * r + 2 * cy + 2, 1);
+        
+        // Row B: y_offset = cy
+        // Top Row: y + r - 1 - cy
+        MLCD_InvertRect(x + r - 1 - cx, y + r - 1 - cy, w - 2 * r + 2 * cx + 2, 1);
+        // Bottom Row: y + h - r + cy
+        MLCD_InvertRect(x + r - 1 - cx, y + h - r + cy, w - 2 * r + 2 * cx + 2, 1);
+        
+        cx++;
+        if (d > 0) {
+            cy--;
+            d = d + 4 * (cx - cy) + 10;
+        } else {
+            d = d + 4 * cx + 6;
+        }
+    }
+}

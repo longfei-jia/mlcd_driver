@@ -6,8 +6,9 @@
 #include "mlcd.h"
 #include "encoder.h"
 #include "animation.h"
-#include <stdio.h>
+#include <stdlib.h> // malloc, free
 #include <string.h>
+#include <stdio.h>
 
 // --- 系统状态 ---
 static MenuPage_t *current_page = NULL;
@@ -19,6 +20,115 @@ static bool is_editing_value = false; // 标记是否处于数值编辑模式
 #define ITEM_HEIGHT      16   // 单行高度
 #define TITLE_HEIGHT     20   // 标题栏高度
 #define SCREEN_VISIBLE_LINES ((MLCD_HEIGHT - TITLE_HEIGHT) / ITEM_HEIGHT)
+
+// --- Helper: 获取指定索引的 Item ---
+static MenuItem_t* Menu_GetItem(MenuPage_t *page, int index) {
+    if (!page || index < 0 || index >= page->item_count) return NULL;
+    MenuItem_t *curr = page->head;
+    while (index > 0 && curr) {
+        curr = curr->next;
+        index--;
+    }
+    return curr;
+}
+
+// --- Builder API Implementation ---
+
+MenuPage_t* Menu_CreatePage(const char *title) {
+    MenuPage_t *page = (MenuPage_t*)malloc(sizeof(MenuPage_t));
+    if (page) {
+        memset(page, 0, sizeof(MenuPage_t));
+        page->title = title;
+    }
+    return page;
+}
+
+static MenuItem_t* Menu_AddItem(MenuPage_t *page, const char *label, MenuItemType_t type) {
+    if (!page) return NULL;
+    
+    MenuItem_t *item = (MenuItem_t*)malloc(sizeof(MenuItem_t));
+    if (!item) return NULL;
+    
+    memset(item, 0, sizeof(MenuItem_t));
+    item->label = label;
+    item->type = type;
+    
+    // Append to list
+    if (page->tail) {
+        page->tail->next = item;
+        page->tail = item;
+    } else {
+        page->head = item;
+        page->tail = item;
+    }
+    page->item_count++;
+    
+    return item;
+}
+
+MenuItem_t* Menu_AddAction(MenuPage_t *page, const char *label, MenuCallback_t callback, void *data) {
+    MenuItem_t *item = Menu_AddItem(page, label, MENU_ITEM_ACTION);
+    if (item) {
+        item->callback = callback;
+        item->data = data;
+    }
+    return item;
+}
+
+MenuItem_t* Menu_AddToggle(MenuPage_t *page, const char *label, bool *val_ptr, MenuCallback_t callback) {
+    MenuItem_t *item = Menu_AddItem(page, label, MENU_ITEM_TOGGLE);
+    if (item) {
+        item->data = val_ptr;
+        item->callback = callback;
+    }
+    return item;
+}
+
+MenuItem_t* Menu_AddValue(MenuPage_t *page, const char *label, int32_t *val_ptr, int32_t min, int32_t max, int32_t step, MenuCallback_t callback) {
+    MenuItem_t *item = Menu_AddItem(page, label, MENU_ITEM_VALUE);
+    if (item) {
+        item->data = val_ptr;
+        item->min_val = min;
+        item->max_val = max;
+        item->step = step;
+        item->callback = callback;
+    }
+    return item;
+}
+
+MenuItem_t* Menu_AddSubMenu(MenuPage_t *page, const char *label, MenuPage_t *sub_page) {
+    MenuItem_t *item = Menu_AddItem(page, label, MENU_ITEM_SUBMENU);
+    if (item) {
+        item->submenu = sub_page;
+    }
+    return item;
+}
+
+void Menu_RemoveItem(MenuPage_t *page, MenuItem_t *item) {
+    if (!page || !item || !page->head) return;
+    
+    if (page->head == item) {
+        page->head = item->next;
+        if (page->tail == item) page->tail = NULL;
+    } else {
+        MenuItem_t *curr = page->head;
+        while (curr->next && curr->next != item) {
+            curr = curr->next;
+        }
+        if (curr->next == item) {
+            curr->next = item->next;
+            if (page->tail == item) page->tail = curr;
+        }
+    }
+    
+    free(item);
+    page->item_count--;
+    
+    // 修正 selected_index
+    if (page->selected_index >= page->item_count && page->item_count > 0) {
+        page->selected_index = page->item_count - 1;
+    }
+}
 
 /**
  * @brief 初始化菜单系统
@@ -54,9 +164,10 @@ static void HandleValueChange(MenuItem_t *item, int direction) {
  * @brief 处理按键确认
  */
 static void HandleEnter(void) {
-    if (!current_page || !current_page->items) return;
+    if (!current_page || !current_page->head) return;
     
-    MenuItem_t *item = &current_page->items[current_page->selected_index];
+    MenuItem_t *item = Menu_GetItem(current_page, current_page->selected_index);
+    if (!item) return;
     
     switch (item->type) {
         case MENU_ITEM_SUBMENU:
@@ -81,19 +192,15 @@ static void HandleEnter(void) {
             
         case MENU_ITEM_RADIO:
             if (item->data) {
-                // 单选逻辑：
-                // 1. 设置当前项为 true
-                // 2. 遍历当前页面的其他 RADIO 项，设为 false
-                // (前提：这些 RADIO 项共享同一个逻辑组，或者我们约定一个页面只能有一组单选)
-                // 这里简化处理：假设当前页面全是互斥的单选
-                
-                // 先全部置 false
-                for (int i = 0; i < current_page->item_count; i++) {
-                    MenuItem_t *p = &current_page->items[i];
+                // 单选逻辑：遍历当前页面的所有项
+                MenuItem_t *p = current_page->head;
+                while (p) {
                     if (p->type == MENU_ITEM_RADIO && p->data) {
                         *(bool*)p->data = false;
                     }
+                    p = p->next;
                 }
+                
                 // 再设置当前为 true
                 *(bool*)item->data = true;
                 
@@ -212,8 +319,8 @@ static void Menu_Render(void) {
     int start_y = TITLE_HEIGHT;
     
     // 3.1 绘制所有文字 (默认为黑色)
-    for (int i = 0; i < current_page->item_count; i++) {
-        MenuItem_t *item = &current_page->items[i];
+    MenuItem_t *curr_item = current_page->head;
+    for (int i = 0; i < current_page->item_count && curr_item; i++, curr_item = curr_item->next) {
         
         // 计算每一项的屏幕Y坐标
         int item_y = (i * ITEM_HEIGHT) - (int)current_scroll + start_y;
@@ -227,23 +334,18 @@ static void Menu_Render(void) {
         // 绘制 Label
         int text_y = item_y + 4; // 垂直居中微调
         if (text_y >= start_y - 6 && text_y < MLCD_HEIGHT) { // 稍微放宽绘制边界
-             // 裁剪Y坐标，避免绘制到标题栏
-             // MLCD_DrawString 内部没有高级裁剪，这里依赖底层 SetPixel 的边界检查
-             // 但为了不覆盖标题栏，应该限制绘制区域。
-             // 由于现在的驱动不支持 Viewport，我们简单处理：只绘制内容区
-             // 如果 text_y < start_y，部分文字会被标题栏遮挡，这里暂不处理复杂裁剪
             
-            MLCD_DrawString(6, text_y, item->label, color);
+            MLCD_DrawString(6, text_y, curr_item->label, color);
             
             // 绘制右侧状态
             char buf[32];
-            switch (item->type) {
+            switch (curr_item->type) {
                 case MENU_ITEM_SUBMENU:
                     MLCD_DrawString(MLCD_WIDTH - 12, text_y, ">", color);
                     break;
                 case MENU_ITEM_TOGGLE:
-                    if (item->data) {
-                        bool val = *(bool*)item->data;
+                    if (curr_item->data) {
+                        bool val = *(bool*)curr_item->data;
                         // 绘制方框 (实心/空心)
                         int box_size = 8;
                         int box_x = MLCD_WIDTH - 14;
@@ -264,8 +366,8 @@ static void Menu_Render(void) {
                     }
                     break;
                 case MENU_ITEM_VALUE:
-                    if (item->data) {
-                        int32_t val = *(int32_t*)item->data;
+                    if (curr_item->data) {
+                        int32_t val = *(int32_t*)curr_item->data;
                         
                         // 如果是当前选中项且处于编辑模式，显示为 < val >
                         bool is_editing_this = (is_editing_value && i == current_page->selected_index);
@@ -282,8 +384,8 @@ static void Menu_Render(void) {
                     }
                     break;
                 case MENU_ITEM_RADIO:
-                    if (item->data) {
-                        bool selected = *(bool*)item->data;
+                    if (curr_item->data) {
+                        bool selected = *(bool*)curr_item->data;
                         // 绘制方框
                         int box_size = 8;
                         int box_x = MLCD_WIDTH - 14;
@@ -318,13 +420,22 @@ static void Menu_Render(void) {
         // 部分在标题栏内，需要裁剪
         int diff = start_y - draw_cursor_y;
         if (diff < ITEM_HEIGHT) {
+             // 裁剪比较麻烦，圆角矩形裁剪更麻烦
+             // 简单处理：如果部分被遮挡，就退化为普通矩形反色，或者只反色露出的部分
              MLCD_InvertRect(2, start_y, MLCD_WIDTH - 5, ITEM_HEIGHT - diff);
         }
     } else if (draw_cursor_y < MLCD_HEIGHT) {
         // 正常区域
         int h = ITEM_HEIGHT;
         if (draw_cursor_y + h > MLCD_HEIGHT) h = MLCD_HEIGHT - draw_cursor_y;
-        MLCD_InvertRect(2, draw_cursor_y, MLCD_WIDTH - 5, h);
+        
+        if (h == ITEM_HEIGHT) {
+            // 完整显示时使用圆角
+            MLCD_InvertRoundRect(2, draw_cursor_y, MLCD_WIDTH - 5, h, 1);
+        } else {
+            // 底部裁剪时退化为直角 (或只保留上部圆角，暂简化)
+            MLCD_InvertRect(2, draw_cursor_y, MLCD_WIDTH - 5, h);
+        }
     }
     
     // 4. 全局反色处理 (深色模式)
@@ -348,10 +459,10 @@ void Menu_Loop(void) {
     
     // 2. 处理导航
     if (diff != 0) {
-        MenuItem_t *curr_item = &current_page->items[current_page->selected_index];
+        MenuItem_t *curr_item = Menu_GetItem(current_page, current_page->selected_index);
         
         // 如果处于编辑模式，且当前是 VALUE 类型，则调节数值
-        if (is_editing_value && curr_item->type == MENU_ITEM_VALUE) {
+        if (curr_item && is_editing_value && curr_item->type == MENU_ITEM_VALUE) {
             HandleValueChange(curr_item, diff > 0 ? 1 : -1);
         } else {
              // 否则 -> 导航移动

@@ -42,12 +42,17 @@ typedef struct MenuItem {
     int32_t max_val;
     int32_t step;
     
+    // 链表指针
+    struct MenuItem *next;
+    
 } MenuItem_t;
 
 // 菜单页面结构体
 typedef struct MenuPage {
     const char *title;          // 页面标题
-    MenuItem_t *items;          // 菜单项数组
+    
+    MenuItem_t *head;           // 链表头
+    MenuItem_t *tail;           // 链表尾 (方便追加)
     uint8_t item_count;         // 项目总数
     
     // 状态保存 (用于从子菜单返回时恢复位置)
@@ -79,8 +84,24 @@ void Menu_Enter(MenuPage_t *page);
 // 返回上一级
 void Menu_Back(void);
 
-// --- 辅助构建宏 ---
-#define MENU_PAGE(name, title_str) \
-    MenuPage_t name = { .title = title_str, .items = NULL, .item_count = 0, .selected_index = 0, .scroll_y = 0, .parent = NULL }
+// --- 构建 API (Builder) ---
+
+// 创建新页面
+MenuPage_t* Menu_CreatePage(const char *title);
+
+// 添加普通动作项
+MenuItem_t* Menu_AddAction(MenuPage_t *page, const char *label, MenuCallback_t callback, void *data);
+
+// 添加开关项
+MenuItem_t* Menu_AddToggle(MenuPage_t *page, const char *label, bool *val_ptr, MenuCallback_t callback);
+
+// 添加数值调整项
+MenuItem_t* Menu_AddValue(MenuPage_t *page, const char *label, int32_t *val_ptr, int32_t min, int32_t max, int32_t step, MenuCallback_t callback);
+
+// 添加子菜单入口
+MenuItem_t* Menu_AddSubMenu(MenuPage_t *page, const char *label, MenuPage_t *sub_page);
+
+// 移除菜单项 (根据指针)
+void Menu_RemoveItem(MenuPage_t *page, MenuItem_t *item);
 
 #endif //MLCD_DRIVER_MENU_H
