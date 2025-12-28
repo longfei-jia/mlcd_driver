@@ -28,6 +28,75 @@
 #include <stdio.h>
 #include "animation.h"
 #include "encoder.h"
+#include "menu.h"
+
+// --- 菜单数据定义 ---
+static bool setting_sound = true;
+static bool setting_vibration = false;
+bool setting_dark_mode = false; // 深色模式 (反色显示，全局可见)
+static int32_t setting_brightness = 50;
+static int32_t setting_contrast = 80;
+
+// 主题切换回调
+void Action_ToggleTheme(MenuItem_t *item) {
+    // 这里仅切换变量，具体的全屏反色逻辑需要在 Menu_Render 中实现
+    // 或者通过 MLCD 驱动层的全局反色标志来实现
+}
+
+// 阻尼设置变量static int32_t setting_contrast = 80;
+
+// 阻尼设置变量
+static int32_t setting_stiffness = 100; // 刚度 (50-200)
+static int32_t setting_damping = 12;    // 阻尼 (1-30)
+
+// 阻尼设置回调 (每次调节数值后重新应用参数)
+void Action_ApplyCustomDamping(MenuItem_t *item) {
+    // 仅更新参数，不重置位置
+    cursor_anim.stiffness = (float)setting_stiffness;
+    cursor_anim.damping = (float)setting_damping;
+}
+
+// 子菜单: 阻尼设置 (数值调节)
+static MenuItem_t damping_items[] = {
+    {"Stiffness", MENU_ITEM_VALUE, NULL, Action_ApplyCustomDamping, &setting_stiffness, 50, 200, 10},
+    {"Damping",   MENU_ITEM_VALUE, NULL, Action_ApplyCustomDamping, &setting_damping, 1, 30, 1},
+    {"Back",      MENU_ITEM_BACK,  NULL, NULL, NULL}
+};
+static MENU_PAGE(page_damping, "Anim Damping");
+
+void Action_Save(MenuItem_t *item) {
+    // 模拟保存动作
+}
+
+// 子菜单: 显示设置
+static MenuItem_t display_items[] = {
+    {"Brightness", MENU_ITEM_VALUE, NULL, NULL, &setting_brightness, 0, 100, 5},
+    {"Contrast",   MENU_ITEM_VALUE, NULL, NULL, &setting_contrast, 0, 100, 1},
+    {"Back",       MENU_ITEM_BACK,  NULL, NULL, NULL}
+};
+static MENU_PAGE(page_display, "Display");
+
+// 子菜单: 系统信息
+static MenuItem_t info_items[] = {
+    {"Ver: 1.0.0", MENU_ITEM_ACTION, NULL, NULL, NULL},
+    {"Build: Dec28",MENU_ITEM_ACTION, NULL, NULL, NULL},
+    {"Back",       MENU_ITEM_BACK,   NULL, NULL, NULL}
+};
+static MENU_PAGE(page_info, "System Info");
+
+// 主菜单
+static MenuItem_t main_items[] = {
+    {"Display",    MENU_ITEM_SUBMENU, &page_display, NULL, NULL},
+    {"Damping",    MENU_ITEM_SUBMENU, &page_damping, NULL, NULL},
+    {"Theme",      MENU_ITEM_TOGGLE,  NULL, Action_ToggleTheme, &setting_dark_mode},
+    {"Sound",      MENU_ITEM_TOGGLE,  NULL, NULL, &setting_sound},
+    {"Vibrate",    MENU_ITEM_TOGGLE,  NULL, NULL, &setting_vibration},
+    {"Info",       MENU_ITEM_SUBMENU, &page_info, NULL, NULL},
+    {"Save Cfg",   MENU_ITEM_ACTION,  NULL, Action_Save, NULL},
+    {"Reboot",     MENU_ITEM_ACTION,  NULL, NULL, NULL}
+};
+static MENU_PAGE(page_main, "Main Menu");
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -98,11 +167,21 @@ int main(void)
   MLCD_Init();
   Encoder_Init();
   
-  // 演示变量
-  int32_t counter = 0;
-  char buf[32];
-  const char* key_msg = "None";
-  uint32_t key_msg_tick = 0;
+  // 链接菜单数据
+  page_main.items = main_items;
+  page_main.item_count = sizeof(main_items) / sizeof(main_items[0]);
+  
+  page_display.items = display_items;
+  page_display.item_count = sizeof(display_items) / sizeof(display_items[0]);
+  
+  page_damping.items = damping_items;
+  page_damping.item_count = sizeof(damping_items) / sizeof(damping_items[0]);
+  
+  page_info.items = info_items;
+  page_info.item_count = sizeof(info_items) / sizeof(info_items[0]);
+  
+  // 初始化菜单系统
+  Menu_Init(&page_main);
 
   /* USER CODE END 2 */
 
@@ -113,63 +192,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // 1. 扫描输入
-    Encoder_Scan();
-    
-    // 2. 获取数据
-    int32_t diff = Encoder_GetDiff();
-    counter += diff;
-    
-    KeyEvent_t evt = Key_GetEvent();
-    if (evt != KEY_EVENT_NONE) {
-        key_msg_tick = HAL_GetTick();
-        switch(evt) {
-            case KEY_EVENT_CLICK:        key_msg = "Click"; break;
-            case KEY_EVENT_DOUBLE_CLICK: key_msg = "Double"; break;
-            case KEY_EVENT_LONG_PRESS:   key_msg = "LongPress"; break;
-            default: break;
-        }
-    }
-    
-    // 3. 3秒后清除按键消息
-    if (HAL_GetTick() - key_msg_tick > 3000) {
-        key_msg = "None";
-    }
-
-    // 4. 显示绘制
-    MLCD_ClearBuffer();
-    
-    MLCD_DrawString(10, 10, "--- Encoder Test ---", MLCD_COLOR_BLACK);
-    
-    // 显示计数值
-    sprintf(buf, "Value: %ld", counter);
-    MLCD_DrawString(10, 35, buf, MLCD_COLOR_BLACK);
-    
-    // 显示方向
-    if (diff > 0) {
-        MLCD_DrawString(10, 55, "Dir: CW  >>>", MLCD_COLOR_BLACK);
-    } else if (diff < 0) {
-        MLCD_DrawString(10, 55, "Dir: CCW <<<", MLCD_COLOR_BLACK);
-    } else {
-        MLCD_DrawString(10, 55, "Dir: Stop", MLCD_COLOR_BLACK);
-    }
-    
-    // 显示按键状态
-    sprintf(buf, "Key: %s", key_msg);
-    MLCD_DrawString(10, 75, buf, MLCD_COLOR_BLACK);
-    
-    // 绘制一个随编码器旋转的小方块
-    int box_x = (counter * 2) % (MLCD_WIDTH - 10);
-    if (box_x < 0) box_x += (MLCD_WIDTH - 10);
-    MLCD_DrawLine(box_x, 95, box_x + 10, 95, MLCD_COLOR_BLACK);
-    MLCD_DrawLine(box_x + 10, 95, box_x + 10, 105, MLCD_COLOR_BLACK);
-    MLCD_DrawLine(box_x + 10, 105, box_x, 105, MLCD_COLOR_BLACK);
-    MLCD_DrawLine(box_x, 105, box_x, 95, MLCD_COLOR_BLACK);
-
-    MLCD_Refresh();
-    
-    // 简单的帧率控制
-    HAL_Delay(10);
+    Menu_Loop();
   }
   /* USER CODE END 3 */
 }

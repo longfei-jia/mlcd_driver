@@ -345,6 +345,51 @@ void Animation3D_Sphere_Run(void) {
     MLCD_Refresh();
 }
 
+// ----------------------------------------------------------------------------
+// Spring Damper Animation System Implementation
+// ----------------------------------------------------------------------------
+
+void Animation_Spring_Init(SpringAnim_t *anim, float start_val, float stiffness, float damping) {
+    if (!anim) return;
+    anim->position = start_val;
+    anim->target = start_val;
+    anim->velocity = 0.0f;
+    anim->stiffness = stiffness;
+    anim->damping = damping;
+    anim->threshold = 0.01f;
+}
+
+void Animation_Spring_SetTarget(SpringAnim_t *anim, float target) {
+    if (!anim) return;
+    anim->target = target;
+}
+
+float Animation_Spring_Update(SpringAnim_t *anim, float dt) {
+    if (!anim) return 0.0f;
+
+    // F = -kx - cv
+    // a = F / m (assuming m=1)
+    // a = -k(pos - target) - c(vel)
+    
+    float displacement = anim->position - anim->target;
+    
+    // 如果非常接近目标且速度很小，直接吸附，节省计算并避免微小抖动
+    if (fabsf(displacement) < anim->threshold && fabsf(anim->velocity) < anim->threshold) {
+        anim->position = anim->target;
+        anim->velocity = 0.0f;
+        return anim->position;
+    }
+
+    float force = -anim->stiffness * displacement - anim->damping * anim->velocity;
+    float acceleration = force; // mass = 1.0f
+    
+    // Semi-implicit Euler integration
+    anim->velocity += acceleration * dt;
+    anim->position += anim->velocity * dt;
+    
+    return anim->position;
+}
+
 /**
  * @brief 运行一帧动画
  */

@@ -38,7 +38,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         Src/animation.c
         Inc/animation.h
         Src/encoder.c
-        Inc/encoder.h)
+        Inc/encoder.h
+        Src/menu.c
+        Inc/menu.h)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)

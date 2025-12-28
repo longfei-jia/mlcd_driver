@@ -81,10 +81,18 @@ void MLCD_Clear(void)
  */
 void MLCD_ClearBuffer(void)
 {
-    // 填充缓冲区为白色 (1)
+    MLCD_Fill(MLCD_COLOR_WHITE);
+}
+
+/**
+ * @brief 填充显存
+ */
+void MLCD_Fill(uint8_t color)
+{
+    uint8_t val = (color == MLCD_COLOR_WHITE) ? 0xFF : 0x00;
     for (int y = 0; y < MLCD_HEIGHT; y++) {
         for (int x = 0; x < MLCD_WIDTH / 8; x++) {
-            mlcd_buffer[y][x] = 0xFF; 
+            mlcd_buffer[y][x] = val; 
         }
     }
 }
@@ -222,6 +230,24 @@ void MLCD_DrawString(uint8_t x, uint8_t y, const char *str, uint8_t color)
 }
 
 /**
+ * @brief 反色指定区域
+ */
+void MLCD_InvertRect(int x, int y, int w, int h) {
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x >= MLCD_WIDTH || y >= MLCD_HEIGHT) return;
+    if (x + w > MLCD_WIDTH) w = MLCD_WIDTH - x;
+    if (y + h > MLCD_HEIGHT) h = MLCD_HEIGHT - y;
+    if (w <= 0 || h <= 0) return;
+
+    for (int row = y; row < y + h; row++) {
+        for (int col = x; col < x + w; col++) {
+            mlcd_buffer[row][col / 8] ^= (1 << (col % 8));
+        }
+    }
+}
+
+/**
  * @brief 刷新显存到屏幕 (全量刷新，解决黑影/同步问题)
  */
 void MLCD_Refresh(void)
@@ -276,6 +302,13 @@ void MLCD_SetPixel(int x, int y, uint8_t color)
     } else {
         mlcd_buffer[y][x / 8] &= ~(1 << (x % 8));
     }
+}
+
+/**
+ * @brief 绘制像素 (MLCD_SetPixel 的别名/包装)
+ */
+void MLCD_DrawPixel(int x, int y, uint8_t color) {
+    MLCD_SetPixel(x, y, color);
 }
 
 // Cohen-Sutherland clipping codes
@@ -355,4 +388,15 @@ void MLCD_DrawLine(int x0, int y0, int x1, int y1, uint8_t color)
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
     }
+}
+
+/**
+ * @brief 绘制矩形 (空心)
+ */
+void MLCD_DrawRect(int x, int y, int w, int h, uint8_t color) {
+    if (w <= 0 || h <= 0) return;
+    MLCD_DrawLine(x, y, x + w - 1, y, color);
+    MLCD_DrawLine(x + w - 1, y, x + w - 1, y + h - 1, color);
+    MLCD_DrawLine(x + w - 1, y + h - 1, x, y + h - 1, color);
+    MLCD_DrawLine(x, y + h - 1, x, y, color);
 }
