@@ -45,7 +45,13 @@ MenuPage_t* Menu_CreatePage(const char *title) {
 }
 
 void Menu_SetLayout(MenuPage_t *page, MenuLayout_t layout) {
-    if (page) page->layout = layout;
+    if (page) {
+        // 如果是当前页面且布局确实发生变化，触发过渡动画
+        if (page == current_page && page->layout != layout) {
+            Animation_Transition_Start();
+        }
+        page->layout = layout;
+    }
 }
 
 static MenuItem_t* Menu_AddItem(MenuPage_t *page, const char *label, MenuItemType_t type) {

@@ -5,6 +5,7 @@
 #include "animation.h"
 #include <stdlib.h> // for rand, abs
 #include <stdio.h> // for sprintf
+#include <math.h>
 
 #define BOX_COUNT 5
 
