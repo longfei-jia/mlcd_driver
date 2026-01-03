@@ -30,8 +30,17 @@ void MLCD_FillCircle(int x0, int y0, int r, uint8_t color); // 填充圆
 void MLCD_DrawRoundRect(int x, int y, int w, int h, int r, uint8_t color); // 画圆角矩形
 void MLCD_FillRoundRect(int x, int y, int w, int h, int r, uint8_t color); // 填充圆角矩形
 void MLCD_InvertRoundRect(int x, int y, int w, int h, int r); // 反色圆角矩形
+typedef enum {
+    MLCD_FONT_NORMAL = 0,
+    MLCD_FONT_BOLD,
+    MLCD_FONT_YAHEI
+} MLCD_Font_t;
+
+void MLCD_SetFont(MLCD_Font_t font);
 void MLCD_DrawChar(uint8_t x, uint8_t y, char c, uint8_t color);
+void MLCD_DrawCharBold(uint8_t x, uint8_t y, char c, uint8_t color);
 void MLCD_DrawString(uint8_t x, uint8_t y, const char *str, uint8_t color);
+void MLCD_DrawStringBold(uint8_t x, uint8_t y, const char *str, uint8_t color);
 void MLCD_DrawBitmap(int x, int y, int w, int h, const uint8_t *bitmap, uint8_t color); // 绘制位图
 void MLCD_DrawBitmapScaled(int x, int y, int w, int h, const uint8_t *bitmap, float scale, uint8_t color); // 缩放绘制位图
 void MLCD_InvertRect(int x, int y, int w, int h); // 反色区域
