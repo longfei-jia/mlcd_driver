@@ -5,6 +5,7 @@
 #include "animation.h"
 #include <stdlib.h> // for rand, abs
 #include <stdio.h> // for sprintf
+#include <math.h>
 
 #define BOX_COUNT 5
 
@@ -70,6 +71,7 @@ void Animation_Init(void) {
 static uint8_t old_page_buffer[MLCD_HEIGHT][MLCD_WIDTH / 8];
 static uint8_t new_page_buffer[MLCD_HEIGHT][MLCD_WIDTH / 8];
 static float transition_progress = 0.0f;
+static float transition_duration = 0.5f; // Default 0.5s
 static bool is_transitioning = false;
 
 // Bayer Matrix 4x4 (0-15)
@@ -79,6 +81,11 @@ static const uint8_t bayer_matrix[4][4] = {
     { 3, 11,  1,  9},
     {15,  7, 13,  5}
 };
+
+void Animation_SetTransitionDuration(float duration) {
+    if (duration < 0.01f) duration = 0.01f;
+    transition_duration = duration;
+}
 
 void Animation_Transition_Start(void) {
     MLCD_CopyBuffer((uint8_t*)old_page_buffer);
@@ -90,8 +97,7 @@ bool Animation_Transition_Update(float dt) {
     if (!is_transitioning) return false;
     
     // 过渡速度 (1.0 / Duration)
-    // 假设 0.5秒 完成
-    transition_progress += dt * 2.0f;
+    transition_progress += dt / transition_duration;
     
     if (transition_progress >= 1.0f) {
         transition_progress = 1.0f;
@@ -114,6 +120,10 @@ void Animation_Transition_Apply(void) {
     uint8_t *dest = MLCD_GetBufferPtr();
     int threshold = (int)(transition_progress * 17); // 0-16 (覆盖 0-15)
     
+    // 获取当前深色模式设置 (需从 menu.c 引用或通过参数传递，这里假设可以访问全局)
+    // 暂时用 extern 声明，或者通过参数
+    extern bool setting_dark_mode;
+    
     // 2. 混合 (Dither Dissolve)
     for (int y = 0; y < MLCD_HEIGHT; y++) {
         for (int col = 0; col < MLCD_WIDTH / 8; col++) {
@@ -125,16 +135,47 @@ void Animation_Transition_Apply(void) {
                 int x = col * 8 + bit;
                 uint8_t bayer_val = bayer_matrix[y % 4][x % 4];
                 
-                // 如果阈值大于 Bayer 值，显示新像素
-                if (threshold > bayer_val) {
-                    if (new_byte & (1 << bit)) {
-                        res_byte |= (1 << bit);
+                // 提取旧像素和新像素的值 (0 or 1)
+                uint8_t old_pixel = (old_byte >> bit) & 0x01;
+                uint8_t new_pixel = (new_byte >> bit) & 0x01;
+                uint8_t out_pixel = 0;
+                
+                // 确定是否应用过渡效果
+                // 规则：只有当像素在任意一帧中是“内容色”时才应用抖动
+                // Normal Mode (White BG=1, Black FG=0): 内容是 0
+                // Dark Mode (Black BG=0, White FG=1): 内容是 1
+                
+                bool apply_dither = false;
+                
+                if (setting_dark_mode) {
+                    // Dark Mode: 背景是 0，内容是 1
+                    // 如果任意一个是 1 (内容)，则应用抖动
+                    if (old_pixel == 1 || new_pixel == 1) {
+                        apply_dither = true;
                     }
                 } else {
-                    // 否则显示旧像素
-                    if (old_byte & (1 << bit)) {
-                        res_byte |= (1 << bit);
+                    // Normal Mode: 背景是 1，内容是 0
+                    // 如果任意一个是 0 (内容)，则应用抖动
+                    if (old_pixel == 0 || new_pixel == 0) {
+                        apply_dither = true;
                     }
+                }
+                
+                if (apply_dither) {
+                    // 应用 Bayer 阈值切换
+                    if (threshold > bayer_val) {
+                        out_pixel = new_pixel;
+                    } else {
+                        out_pixel = old_pixel;
+                    }
+                } else {
+                    // 纯背景区域，直接显示新页面 (或者旧页面，反正是一样的)
+                    out_pixel = new_pixel; 
+                }
+                
+                // 写入结果
+                if (out_pixel) {
+                    res_byte |= (1 << bit);
                 }
             }
             dest[y * (MLCD_WIDTH / 8) + col] = res_byte;
@@ -255,10 +296,19 @@ void Animation3D_Cube_Init(void) {
 }
 
 void Animation3D_Cube_Run(void) {
+    // 1. 始终清除为白底 (便于后续绘制黑线)
     MLCD_ClearBuffer();
+
     angle_x += 0.03f; angle_y += 0.05f; angle_z += 0.02f;
     ProjectAndDraw(cube_vertices, 8, cube_edges, 12, 30.0f);
     ShowFPS();
+    
+    // 如果是深色模式，对整个画面取反 (白底黑线 -> 黑底白线)
+    extern bool setting_dark_mode;
+    if (setting_dark_mode) {
+       MLCD_InvertRect(0, 0, MLCD_WIDTH, MLCD_HEIGHT);
+    }
+    
     MLCD_Refresh();
 }
 
@@ -289,10 +339,19 @@ void Animation3D_Pyramid_Init(void) {
 }
 
 void Animation3D_Pyramid_Run(void) {
+    // 1. 始终清除为白底
     MLCD_ClearBuffer();
+
     angle_x += 0.04f; angle_y -= 0.03f;
     ProjectAndDraw(pyramid_vertices, 4, pyramid_edges, 6, 40.0f);
     ShowFPS();
+    
+    // 如果是深色模式，对整个画面取反
+    extern bool setting_dark_mode;
+    if (setting_dark_mode) {
+       MLCD_InvertRect(0, 0, MLCD_WIDTH, MLCD_HEIGHT);
+    }
+    
     MLCD_Refresh();
 }
 
@@ -383,7 +442,9 @@ void Animation3D_Sphere_Init(void) {
 }
 
 void Animation3D_Sphere_Run(void) {
+    // 1. 始终清除为白底
     MLCD_ClearBuffer();
+    
     angle_x += 0.02f; angle_y += 0.04f;
     // Sphere has many vertices, use custom ProjectAndDraw to avoid stack overflow
     // Re-implementing simplified version for Sphere due to array size limits in helper
@@ -424,6 +485,13 @@ void Animation3D_Sphere_Run(void) {
     }
 
     ShowFPS();
+    
+    // 如果是深色模式，对整个画面取反
+    extern bool setting_dark_mode;
+    if (setting_dark_mode) {
+       MLCD_InvertRect(0, 0, MLCD_WIDTH, MLCD_HEIGHT);
+    }
+    
     MLCD_Refresh();
 }
 

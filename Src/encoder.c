@@ -5,15 +5,21 @@
 #include "../Inc/encoder.h"
 #include "tim.h"
 #include "gpio.h"
+#include <stdlib.h> // for abs()
 
 // --- 配置参数 ---
 #define KEY_DEBOUNCE_TIME    20   // 消抖时间 (ms)
 #define KEY_LONG_PRESS_TIME  800  // 长按判定时间 (ms)
 #define KEY_DOUBLE_CLICK_GAP 300  // 双击间隔时间 (ms)
 
+// 编码器防抖参数
+#define ENCODER_FILTER_MS    10   // 降低滤波时间，提高响应
+#define ENCODER_ACC_THRESHOLD 4   // 累积阈值 (4表示每4个脉冲算1格，对应标准EC11)
+
 // --- 变量定义 ---
 static uint32_t last_counter = 0;
 static int32_t  encoder_diff = 0;
+static uint32_t last_rotate_time = 0; // 上次有效旋转的时间
 
 // 按键状态机定义
 typedef enum {
@@ -47,12 +53,24 @@ void Encoder_Init(void) {
 }
 
 /**
- * @brief 获取编码器增量并清除
+ * @brief 获取编码器旋转增量
+ * 增加了时间滤波，防止接触不良导致的跳变
  */
 int32_t Encoder_GetDiff(void) {
-    int32_t diff = encoder_diff / 4; // TI12 模式下每格变化通常为 4 (4倍频)，除以 4 归一化
+    int32_t diff = encoder_diff / ENCODER_ACC_THRESHOLD; 
+    
     if (diff != 0) {
-        encoder_diff -= diff * 4; // 只减去已读取的部分，保留余数避免丢失
+        uint32_t now = HAL_GetTick();
+        
+        // 滤波逻辑：
+        // 如果变化只有 1 格，且距离上次触发时间小于阈值，则认为是抖动或过于灵敏，暂时抑制
+        // 除非用户快速旋转（diff > 1），则不限制
+        if (abs(diff) == 1 && (now - last_rotate_time < ENCODER_FILTER_MS)) {
+             return 0;
+        }
+        
+        last_rotate_time = now;
+        encoder_diff -= diff * ENCODER_ACC_THRESHOLD; // 减去已处理的计数
     }
     return diff;
 }
@@ -100,13 +118,16 @@ void Encoder_Scan(void) {
             break;
 
         case KEY_STATE_DEBOUNCE:
+            // 持续检测：如果在消抖期间松开，说明是抖动，重置状态
+            if (!is_pressed) {
+                key_state = KEY_STATE_IDLE;
+                break;
+            }
+            
             if (now - key_timer >= KEY_DEBOUNCE_TIME) {
-                if (is_pressed) {
-                    key_state = KEY_STATE_PRESSED;
-                    key_timer = now; // 重置计时用于长按判断
-                } else {
-                    key_state = KEY_STATE_IDLE; // 抖动，忽略
-                }
+                // 持续按下一段时间后，确认为按下
+                key_state = KEY_STATE_PRESSED;
+                key_timer = now; // 重置计时用于长按判断
             }
             break;
 

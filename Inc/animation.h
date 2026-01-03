@@ -72,6 +72,9 @@ float Animation_Spring_Update(SpringAnim_t *anim, float dt);
 // Page Transition System (页面切换过渡)
 // ----------------------------------------------------------------------------
 
+// 设置过渡动画时长 (秒)
+void Animation_SetTransitionDuration(float duration);
+
 // 开始页面切换过渡 (捕获当前屏幕)
 void Animation_Transition_Start(void);
 

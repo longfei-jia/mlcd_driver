@@ -33,6 +33,7 @@ void MLCD_InvertRoundRect(int x, int y, int w, int h, int r); // 反色圆角矩
 void MLCD_DrawChar(uint8_t x, uint8_t y, char c, uint8_t color);
 void MLCD_DrawString(uint8_t x, uint8_t y, const char *str, uint8_t color);
 void MLCD_DrawBitmap(int x, int y, int w, int h, const uint8_t *bitmap, uint8_t color); // 绘制位图
+void MLCD_DrawBitmapScaled(int x, int y, int w, int h, const uint8_t *bitmap, float scale, uint8_t color); // 缩放绘制位图
 void MLCD_InvertRect(int x, int y, int w, int h); // 反色区域
 void MLCD_Refresh(void);     // 刷新显存到屏幕
 

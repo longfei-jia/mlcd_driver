@@ -283,6 +283,37 @@ void MLCD_DrawBitmap(int x, int y, int w, int h, const uint8_t *bitmap, uint8_t 
 }
 
 /**
+ * @brief 缩放绘制位图 (Nearest Neighbor Interpolation)
+ */
+void MLCD_DrawBitmapScaled(int x, int y, int w, int h, const uint8_t *bitmap, float scale, uint8_t color) {
+    if (!bitmap || scale <= 0.0f) return;
+    
+    int scaled_w = (int)(w * scale);
+    int scaled_h = (int)(h * scale);
+    int byte_width = (w + 7) / 8;
+    
+    // 为了保持居中，传入的 x,y 是缩放后的左上角坐标
+    
+    for (int row = 0; row < scaled_h; row++) {
+        // 映射回原图坐标
+        int src_y = (int)(row / scale);
+        if (src_y >= h) src_y = h - 1;
+        
+        for (int col = 0; col < scaled_w; col++) {
+            int src_x = (int)(col / scale);
+            if (src_x >= w) src_x = w - 1;
+            
+            int byte_idx = src_y * byte_width + (src_x / 8);
+            int bit_idx = 7 - (src_x % 8);
+            
+            if (bitmap[byte_idx] & (1 << bit_idx)) {
+                MLCD_SetPixel(x + col, y + row, color);
+            }
+        }
+    }
+}
+
+/**
  * @brief 反色指定区域
  */
 void MLCD_InvertRect(int x, int y, int w, int h) {
@@ -317,19 +348,18 @@ void MLCD_Refresh(void)
 
     // 2. 逐行发送所有数据
     // 即使数据没变也发送，确保屏幕与显存绝对同步，消除残影
+    uint8_t line_buffer[1 + MLCD_WIDTH / 8 + 1]; // Addr + Data + Dummy
+
     for (int line = 1; line <= MLCD_HEIGHT; line++) {
         int y = line - 1;
 
-        // 2.1 行地址 (LSB First)
-        uint8_t addr = line;
-        HAL_SPI_Transmit(&hspi1, &addr, 1, 100);
-        
-        // 2.2 数据 (128像素 = 16字节)
-        HAL_SPI_Transmit(&hspi1, mlcd_buffer[y], MLCD_WIDTH / 8, 100);
-        
-        // 2.3 行尾 Dummy (8 bits)
-        uint8_t dummy = 0x00;
-        HAL_SPI_Transmit(&hspi1, &dummy, 1, 100);
+        // 组包：Addr (1) + Data (16) + Dummy (1)
+        line_buffer[0] = line; // LSB First
+        memcpy(&line_buffer[1], mlcd_buffer[y], MLCD_WIDTH / 8);
+        line_buffer[17] = 0x00; // Dummy
+
+        // 一次性发送整行 (18 bytes)
+        HAL_SPI_Transmit(&hspi1, line_buffer, sizeof(line_buffer), 100);
     }
     
     // 3. 帧尾 Dummy (16 bits)
